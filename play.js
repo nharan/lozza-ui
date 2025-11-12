@@ -18,8 +18,6 @@ var startFromUI = 'start';
 var level       = 1;
 var selectedSquare = null;
 var selectedPiece = null;
-var historyIndex = -1;
-var inReplayMode = false;
 
 lozData.page    = 'play.htm';
 lozData.idInfo  = '#info';
@@ -65,7 +63,6 @@ function lozUpdateBestMove () {
   
   board.position(chess.fen());
   $('#moves').html(chess.pgn({newline_char: '<br>'}));
-  updateHistoryButtons();
 
   if (!chess.game_over())
     drag = true;
@@ -118,7 +115,6 @@ var onDrop = function(source, target, piece, newPos, oldPos, orientation) {
 
   var pgn = chess.pgn({newline_char: '<br>'});
   $('#moves').html(pgn);
-  updateHistoryButtons();
 
   drag = false;
 
@@ -227,7 +223,6 @@ var onClick = function(square) {
     clearHighlights();
     board.position(chess.fen());
     $('#moves').html(chess.pgn({newline_char: '<br>'}));
-    updateHistoryButtons();
 
     drag = false;
 
@@ -291,63 +286,6 @@ function getLevel () {
     level = 1;
   if (level > 10)
     level = 10;
-}
-
-//}}}
-//{{{  updateHistoryButtons
-
-function updateHistoryButtons() {
-  var history = chess.history();
-  historyIndex = history.length - 1;
-  
-  $('#btnFirst').prop('disabled', historyIndex < 0);
-  $('#btnPrev').prop('disabled', historyIndex < 0);
-  $('#btnNext').prop('disabled', historyIndex >= history.length - 1 || !inReplayMode);
-  $('#btnLast').prop('disabled', historyIndex >= history.length - 1 || !inReplayMode);
-  
-  if (inReplayMode) {
-    $('#moveIndicator').text('Move ' + (historyIndex + 1) + ' of ' + history.length);
-  } else {
-    $('#moveIndicator').text('');
-  }
-}
-
-//}}}
-//{{{  goToMove
-
-function goToMove(index) {
-  var history = chess.history();
-  if (index < -1 || index >= history.length) return;
-  
-  inReplayMode = true;
-  drag = false;
-  
-  // Reset to start
-  chess.reset();
-  if (args.fen) {
-    chess.load(args.fen);
-  }
-  
-  // Replay moves up to index
-  var moves = history.slice(0, index + 1);
-  for (var i = 0; i < moves.length; i++) {
-    chess.move(moves[i]);
-  }
-  
-  historyIndex = index;
-  board.position(chess.fen());
-  updateHistoryButtons();
-}
-
-//}}}
-//{{{  exitReplayMode
-
-function exitReplayMode() {
-  var history = chess.history();
-  goToMove(history.length - 1);
-  inReplayMode = false;
-  drag = true;
-  updateHistoryButtons();
 }
 
 //}}}
@@ -475,32 +413,6 @@ $(function() {
     return false;
   });
   
-  // History navigation buttons
-  $('#btnFirst').click(function() {
-    goToMove(-1);
-    return false;
-  });
-  
-  $('#btnPrev').click(function() {
-    if (historyIndex > -1) {
-      goToMove(historyIndex - 1);
-    }
-    return false;
-  });
-  
-  $('#btnNext').click(function() {
-    var history = chess.history();
-    if (historyIndex < history.length - 1) {
-      goToMove(historyIndex + 1);
-    }
-    return false;
-  });
-  
-  $('#btnLast').click(function() {
-    exitReplayMode();
-    return false;
-  });
-  
   
   //}}}
 
@@ -577,9 +489,6 @@ $(function() {
   }
   //$(lozData.idInfo).prepend('Level ' + level + '<br>');
   $('#strength').html('Strength (' + level + ')');
-  
-  // Initialize history buttons
-  updateHistoryButtons();
 
   //console.log(args);
 
