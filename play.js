@@ -16,6 +16,10 @@ var engine      = null;
 var startFrom   = 'startpos';
 var startFromUI = 'start';
 var level       = 1;
+var selectedSquare = null;
+var selectedPiece = null;
+var historyIndex = -1;
+var inReplayMode = false;
 
 lozData.page    = 'play.htm';
 lozData.idInfo  = '#info';
@@ -34,9 +38,34 @@ function lozUpdateBestMove () {
     move.promotion = lozData.bmPr;
   }
 
-  chess.move(move);
+  console.log('AI attempting move:', move);
+  console.log('Move details - from:', move.from, 'to:', move.to, 'promotion:', move.promotion);
+  
+  var result = chess.move(move);
+  
+  if (!result) {
+    console.error('AI move failed!', move);
+    console.error('Current FEN:', chess.fen());
+    console.error('Current turn:', chess.turn());
+    console.error('Legal moves (verbose):', chess.moves({verbose: true}));
+    console.error('Legal moves (SAN):', chess.moves());
+    
+    // Try to understand why the move failed
+    var piece = chess.get(move.from);
+    console.error('Piece at source square:', piece);
+    var targetPiece = chess.get(move.to);
+    console.error('Piece at target square:', targetPiece);
+    
+    $(lozData.idInfo).prepend('<span style="color:red">ERROR: AI suggested illegal move ' + move.from + move.to + (move.promotion || '') + '</span><br>');
+    drag = true;
+    return;
+  }
+  
+  console.log('AI move successful:', result);
+  
   board.position(chess.fen());
   $('#moves').html(chess.pgn({newline_char: '<br>'}));
+  updateHistoryButtons();
 
   if (!chess.game_over())
     drag = true;
@@ -59,18 +88,28 @@ function lozUpdateBestMove () {
 //}
 
 //}}}
+//{{{  clearHighlights
+
+function clearHighlights() {
+  $('#board .square-55d63').css('background-color', '');
+}
+
+//}}}
 //{{{  onDrop
 
 var onDrop = function(source, target, piece, newPos, oldPos, orientation) {
 
   if (target == 'offboard' || target == source) {
-    //console.log('offboard');
     return;
   }
 
+  // Clear any click selection
+  selectedSquare = null;
+  selectedPiece = null;
+  clearHighlights();
+
   var move = chess.move({from: source, to: target, promotion: 'q'})
   if (!move) {
-    //console.log('invalid');
     return 'snapback';
   }
 
@@ -79,6 +118,7 @@ var onDrop = function(source, target, piece, newPos, oldPos, orientation) {
 
   var pgn = chess.pgn({newline_char: '<br>'});
   $('#moves').html(pgn);
+  updateHistoryButtons();
 
   drag = false;
 
@@ -100,7 +140,106 @@ var onDragStart = function(source, piece, position, orientation) {
     return false;
   }
 
+  // Clear any click selection when starting a drag
+  selectedSquare = null;
+  selectedPiece = null;
+  clearHighlights();
+
   return true;
+};
+
+//}}}
+//{{{  onClick
+
+var onClick = function(square) {
+  // Don't allow moves when it's not the player's turn
+  if (!drag) {
+    return;
+  }
+
+  var piece = chess.get(square);
+  var orientation = board.orientation();
+
+  // If no piece is selected yet
+  if (selectedSquare === null) {
+    // Check if there's a piece on this square and it's the player's piece
+    if (piece && 
+        ((orientation === 'white' && piece.color === 'w') || 
+         (orientation === 'black' && piece.color === 'b'))) {
+      selectedSquare = square;
+      selectedPiece = piece;
+      // Clear old highlights and highlight the selected square
+      clearHighlights();
+      board.position(chess.fen(), false);
+      $('#board .square-' + square).css('background-color', 'yellow');
+    }
+  } 
+  // If a piece is already selected
+  else {
+    // If clicking the same square, deselect
+    if (square === selectedSquare) {
+      selectedSquare = null;
+      selectedPiece = null;
+      clearHighlights();
+      board.position(chess.fen(), false);
+      return;
+    }
+
+    // If clicking another piece of the same color, select that instead
+    if (piece && 
+        ((orientation === 'white' && piece.color === 'w') || 
+         (orientation === 'black' && piece.color === 'b'))) {
+      selectedSquare = square;
+      selectedPiece = piece;
+      clearHighlights();
+      board.position(chess.fen(), false);
+      $('#board .square-' + square).css('background-color', 'yellow');
+      return;
+    }
+
+    // Try to make the move (but NOT self-captures via click)
+    // Self-captures must use drag-and-drop
+    var targetPiece = chess.get(square);
+    if (targetPiece && targetPiece.color === selectedPiece.color) {
+      // This is a self-capture attempt via click - don't allow it
+      // User must drag-and-drop for self-captures
+      selectedSquare = null;
+      selectedPiece = null;
+      clearHighlights();
+      board.position(chess.fen(), false);
+      return;
+    }
+
+    var move = chess.move({from: selectedSquare, to: square, promotion: 'q'});
+    
+    if (!move) {
+      // Invalid move, deselect
+      selectedSquare = null;
+      selectedPiece = null;
+      clearHighlights();
+      board.position(chess.fen(), false);
+      return;
+    }
+
+    // Valid move made
+    selectedSquare = null;
+    selectedPiece = null;
+    clearHighlights();
+    board.position(chess.fen());
+    $('#moves').html(chess.pgn({newline_char: '<br>'}));
+    updateHistoryButtons();
+
+    drag = false;
+
+    if (!chess.game_over()) {
+      $(lozData.idInfo).html('');
+      engine.postMessage('position ' + startFrom + ' moves ' + strMoves());
+      postGo();
+    }
+    else {
+      showEnd();
+    }
+  }
 };
 
 //}}}
@@ -152,6 +291,63 @@ function getLevel () {
     level = 1;
   if (level > 10)
     level = 10;
+}
+
+//}}}
+//{{{  updateHistoryButtons
+
+function updateHistoryButtons() {
+  var history = chess.history();
+  historyIndex = history.length - 1;
+  
+  $('#btnFirst').prop('disabled', historyIndex < 0);
+  $('#btnPrev').prop('disabled', historyIndex < 0);
+  $('#btnNext').prop('disabled', historyIndex >= history.length - 1 || !inReplayMode);
+  $('#btnLast').prop('disabled', historyIndex >= history.length - 1 || !inReplayMode);
+  
+  if (inReplayMode) {
+    $('#moveIndicator').text('Move ' + (historyIndex + 1) + ' of ' + history.length);
+  } else {
+    $('#moveIndicator').text('');
+  }
+}
+
+//}}}
+//{{{  goToMove
+
+function goToMove(index) {
+  var history = chess.history();
+  if (index < -1 || index >= history.length) return;
+  
+  inReplayMode = true;
+  drag = false;
+  
+  // Reset to start
+  chess.reset();
+  if (args.fen) {
+    chess.load(args.fen);
+  }
+  
+  // Replay moves up to index
+  var moves = history.slice(0, index + 1);
+  for (var i = 0; i < moves.length; i++) {
+    chess.move(moves[i]);
+  }
+  
+  historyIndex = index;
+  board.position(chess.fen());
+  updateHistoryButtons();
+}
+
+//}}}
+//{{{  exitReplayMode
+
+function exitReplayMode() {
+  var history = chess.history();
+  goToMove(history.length - 1);
+  inReplayMode = false;
+  drag = true;
+  updateHistoryButtons();
 }
 
 //}}}
@@ -279,6 +475,32 @@ $(function() {
     return false;
   });
   
+  // History navigation buttons
+  $('#btnFirst').click(function() {
+    goToMove(-1);
+    return false;
+  });
+  
+  $('#btnPrev').click(function() {
+    if (historyIndex > -1) {
+      goToMove(historyIndex - 1);
+    }
+    return false;
+  });
+  
+  $('#btnNext').click(function() {
+    var history = chess.history();
+    if (historyIndex < history.length - 1) {
+      goToMove(historyIndex + 1);
+    }
+    return false;
+  });
+  
+  $('#btnLast').click(function() {
+    exitReplayMode();
+    return false;
+  });
+  
   
   //}}}
 
@@ -302,6 +524,27 @@ $(function() {
     onDrop       : onDrop,
     onDragStart  : onDragStart,
     position     : startFromUI
+  });
+
+  // Add mousedown/mouseup handler to detect clicks vs drags
+  var mouseDownSquare = null;
+  var mouseDownTime = 0;
+  
+  $('#board').on('mousedown', '.square-55d63', function(e) {
+    mouseDownSquare = $(this).attr('data-square');
+    mouseDownTime = Date.now();
+  });
+  
+  $('#board').on('mouseup', '.square-55d63', function(e) {
+    var square = $(this).attr('data-square');
+    var timeDiff = Date.now() - mouseDownTime;
+    
+    // If mouse up on same square within 200ms, treat as click
+    if (square === mouseDownSquare && timeDiff < 200) {
+      onClick(square);
+    }
+    
+    mouseDownSquare = null;
   });
 
   //$(lozData.idInfo).prepend('Version ' + BUILD + ' ' + PLAYBUILD + '<br>');
@@ -334,6 +577,9 @@ $(function() {
   }
   //$(lozData.idInfo).prepend('Level ' + level + '<br>');
   $('#strength').html('Strength (' + level + ')');
+  
+  // Initialize history buttons
+  updateHistoryButtons();
 
   //console.log(args);
 

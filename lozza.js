@@ -74,6 +74,7 @@ const BASE_MYKILLERS  = BASE_MATEKILLER - 100;
 const BASE_GPKILLERS  = BASE_MYKILLERS  - 100;
 const BASE_CASTLING   = BASE_GPKILLERS  - 100;
 const BASE_BADTAKES   = BASE_CASTLING   - 1000;
+const BASE_SELFCAPTURE = BASE_BADTAKES - 500;  // Self-captures ranked between bad takes and quiet moves
 const BASE_HISSLIDE   = UINT32_MAX >>> 1;
 const BASE_SLIDE      = 100;
 
@@ -856,10 +857,22 @@ function addCapture (node, move) {
 
   else {
 
-    const victim = RANK_VECTOR[((move & MOVE_TOOBJ_MASK) >>> MOVE_TOOBJ_BITS) & PIECE_MASK];
-    const attack = RANK_VECTOR[((move & MOVE_FROBJ_MASK) >>> MOVE_FROBJ_BITS) & PIECE_MASK];
+    const toObj = (move & MOVE_TOOBJ_MASK) >>> MOVE_TOOBJ_BITS;
+    const frObj = (move & MOVE_FROBJ_MASK) >>> MOVE_FROBJ_BITS;
+    const victim = RANK_VECTOR[toObj & PIECE_MASK];
+    const attack = RANK_VECTOR[frObj & PIECE_MASK];
 
-    if (victim > attack) {
+    // Detect self-captures by comparing piece colors
+    const isSelfCapture = (toObj & COLOR_MASK) === (frObj & COLOR_MASK);
+
+    if (isSelfCapture) {
+      // Self-captures: rank based on positional improvement
+      // Lower priority than opponent captures but higher than quiet moves
+      node.moves[node.numMoves]   = move;
+      node.ranks[node.numMoves++] = BASE_SELFCAPTURE + victim - attack;
+    }
+
+    else if (victim > attack) {
       node.moves[node.numMoves]   = move;
       node.ranks[node.numMoves++] = BASE_GOODTAKES + (victim << 6) - attack;
     }
@@ -9049,7 +9062,8 @@ function genMoves (node, turn) {
     var pList       = wList;
     var theirKingSq = bList[0];
     var pCount      = wCount;
-    var CAPTURE     = IS_BNK;
+    var CAPTURE     = IS_BNK;  // Can capture black pieces (except king)
+    var SELF_CAPTURE = IS_WNK;  // Can also capture own pieces (except king)
     var aligned     = ALIGNED[wList[0]];
   
     if (inCheck === 0 && rights !== 0) {
@@ -9074,7 +9088,8 @@ function genMoves (node, turn) {
     var pList       = bList;
     var theirKingSq = wList[0];
     var pCount      = bCount;
-    var CAPTURE     = IS_WNK;
+    var CAPTURE     = IS_WNK;  // Can capture white pieces (except king)
+    var SELF_CAPTURE = IS_BNK;  // Can also capture own pieces (except king)
     var aligned     = ALIGNED[bList[0]];
   
     if (inCheck === 0 && rights !== 0) {
@@ -9143,7 +9158,7 @@ function genMoves (node, turn) {
         to    = fr + offsetDiag1;
         toObj = b[to];
         
-        if (CAPTURE[toObj] !== 0) {
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0) {
         
           if (frRank === promoteRank)
             addPromotion(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to | legalMask);
@@ -9160,7 +9175,7 @@ function genMoves (node, turn) {
         to    = fr + offsetDiag2;
         toObj = b[to];
         
-        if (CAPTURE[toObj] !== 0) {
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0) {
         
           if (frRank === promoteRank)
             addPromotion(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to | legalMask);
@@ -9185,49 +9200,49 @@ function genMoves (node, turn) {
         to = fr + 25;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 25;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr + 23;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 23;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr + 14;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 14;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr + 10;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 10;
         if ((toObj = b[to]) === 0)
           addSlide(node, myMove | to);
-        else if (CAPTURE[toObj] !== 0)
+        else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         break;
@@ -9242,25 +9257,29 @@ function genMoves (node, turn) {
         to = fr + 11;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 11;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 11;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 11;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr + 13;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 13;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 13;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 13;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         break;
@@ -9275,25 +9294,29 @@ function genMoves (node, turn) {
         to = fr + 1;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 1;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 1;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 1;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr + 12;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 12;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 12;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 12;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         break;
@@ -9308,25 +9331,29 @@ function genMoves (node, turn) {
         to = fr + 11;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 11;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 11;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 11;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr + 13;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 13;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 13;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 13;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         //}}}
@@ -9337,25 +9364,29 @@ function genMoves (node, turn) {
         to = fr + 1;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 1;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 1;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 1;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr + 12;
         while (b[to] === 0)
           addSlide(node, myMove | to), to += 12;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         to = fr - 12;
         while (b[to] === 0)
           addSlide(node, myMove | to), to -= 12;
-        if (CAPTURE[toObj = b[to]] !== 0)
+        toObj = b[to];
+        if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
           addCapture(node, myMove | (toObj << MOVE_TOOBJ_BITS) | to);
         
         break;
@@ -9369,7 +9400,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -9377,7 +9408,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -9385,7 +9416,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -9393,7 +9424,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -9401,7 +9432,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -9409,7 +9440,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -9417,7 +9448,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -9425,7 +9456,7 @@ function genMoves (node, turn) {
         if (ADJACENT[Math.abs(to-theirKingSq)] === 0) {
           if ((toObj = b[to]) === 0)
             addSlide(node, frMove | to);
-          else if (CAPTURE[toObj] !== 0)
+          else if (CAPTURE[toObj] !== 0 || SELF_CAPTURE[toObj] !== 0)
             addCapture(node, frMove | (toObj << MOVE_TOOBJ_BITS) | to);
         }
         
@@ -10535,6 +10566,18 @@ const WB_OFFSET_DIAG2 = new Int8Array([-11, 11]);
 
 const QS = new Uint8Array([0,0,3,3,5,9,0]);
 
+//{{{  getPositionalBonus
+
+function getPositionalBonus (fr, to, piece) {
+  // Calculate positional improvement from moving piece
+  const pieceType = piece & PIECE_MASK;
+  const slideScores = SLIDE_SCORES[piece];
+  return (slideScores[to] - slideScores[fr]) * 10;  // Scale factor
+}
+
+//}}}
+//{{{  quickSee
+
 function quickSee (turn, move) {
 
   if ((move & MOVE_SPECIAL_MASK) !== 0)
@@ -10548,6 +10591,24 @@ function quickSee (turn, move) {
 
   const to    = (move & MOVE_TO_MASK   ) >>> MOVE_TO_BITS;
   const toObj = (move & MOVE_TOOBJ_MASK) >>> MOVE_TOOBJ_BITS;
+
+  // Check if this is a self-capture
+  const isSelfCapture = (toObj !== 0) && ((toObj & COLOR_MASK) === (frObj & COLOR_MASK));
+
+  if (isSelfCapture) {
+    // For self-captures, evaluate based on positional improvement
+    // Self-capture loses the captured piece's value but may gain positional compensation
+    const fr = (move & MOVE_FR_MASK) >>> MOVE_FR_BITS;
+    const victimValue = MATERIAL[toObj & PIECE_MASK];
+    const positionalBonus = getPositionalBonus(fr, to, frObj);
+    
+    // Return negative value (material loss) plus positional bonus
+    // If positional bonus doesn't compensate for material loss, return negative
+    const netValue = -victimValue + positionalBonus;
+    
+    // Return -1 if it's a bad self-capture, 0 if neutral/positive
+    return (netValue < -50) ? -1 : 0;
+  }
 
   const cx = turn >>> 3;
 
@@ -10568,6 +10629,8 @@ function quickSee (turn, move) {
   return 0;
 
 }
+
+//}}}
 
 //}}}
 //{{{  addHistory
@@ -10630,6 +10693,99 @@ function isDraw () {
 
   return 0;
 
+}
+
+//}}}
+//{{{  hasSelfCaptureOpportunity
+
+function hasSelfCaptureOpportunity (node, turn) {
+  // Quick check if self-captures are available in the current position
+  // Used in search extensions and pruning decisions
+  
+  const b = bdB;
+  const pList = turn === WHITE ? wList : bList;
+  const pCount = turn === WHITE ? wCount : bCount;
+  const SELF_CAPTURE = turn === WHITE ? IS_WNK : IS_BNK;
+  
+  let next = 0;
+  let count = 0;
+  
+  // Scan through all pieces of the current side
+  while (count < pCount) {
+    const fr = pList[next];
+    if (fr === 0) {
+      next++;
+      continue;
+    }
+    
+    const frObj = b[fr];
+    const frPiece = frObj & PIECE_MASK;
+    
+    // Check adjacent squares for capturable friendly pieces
+    // For sliding pieces (bishop, rook, queen)
+    if (frPiece === BISHOP || frPiece === ROOK || frPiece === QUEEN) {
+      const offsets = frPiece === BISHOP ? [-13, -11, 11, 13] :
+                      frPiece === ROOK   ? [-12, -1, 1, 12] :
+                      [-13, -12, -11, -1, 1, 11, 12, 13];
+      
+      for (let i = 0; i < offsets.length; i++) {
+        let to = fr + offsets[i];
+        while (IS_OE[b[to]]) {
+          const toObj = b[to];
+          if (toObj !== 0) {
+            // Found a piece - check if it's a capturable friendly piece
+            if (SELF_CAPTURE[toObj]) {
+              return 1;  // Self-capture opportunity found
+            }
+            break;  // Blocked by any piece
+          }
+          to += offsets[i];
+        }
+      }
+    }
+    
+    // For knights
+    else if (frPiece === KNIGHT) {
+      const offsets = [-25, -23, -14, -10, 10, 14, 23, 25];
+      for (let i = 0; i < offsets.length; i++) {
+        const to = fr + offsets[i];
+        const toObj = b[to];
+        if (SELF_CAPTURE[toObj]) {
+          return 1;  // Self-capture opportunity found
+        }
+      }
+    }
+    
+    // For pawns (diagonal captures only)
+    else if (frPiece === PAWN) {
+      const offsetDiag1 = turn === WHITE ? -13 : 13;
+      const offsetDiag2 = turn === WHITE ? -11 : 11;
+      
+      const to1 = fr + offsetDiag1;
+      const to2 = fr + offsetDiag2;
+      
+      if (SELF_CAPTURE[b[to1]] || SELF_CAPTURE[b[to2]]) {
+        return 1;  // Self-capture opportunity found
+      }
+    }
+    
+    // For king (all adjacent squares)
+    else if (frPiece === KING) {
+      const offsets = [-13, -12, -11, -1, 1, 11, 12, 13];
+      for (let i = 0; i < offsets.length; i++) {
+        const to = fr + offsets[i];
+        const toObj = b[to];
+        if (SELF_CAPTURE[toObj]) {
+          return 1;  // Self-capture opportunity found
+        }
+      }
+    }
+    
+    count++;
+    next++;
+  }
+  
+  return 0;  // No self-capture opportunities found
 }
 
 //}}}

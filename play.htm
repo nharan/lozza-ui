@@ -18,7 +18,7 @@
 
 <style>
 body   {padding: 20px;}
-#board {width: 100%; max-width: 350px;}
+#board {width: 100%; max-width: 1050px;}
 #stats {font-weight: bold;}
 #moves {font-weight: bold;}
 </style>
@@ -83,6 +83,16 @@ body   {padding: 20px;}
 </p>
 
 <p id="board"></p>
+
+<p>
+<div class="btn-group">
+  <button id="btnFirst" class="btn btn-default" title="Go to start">⏮ First</button>
+  <button id="btnPrev" class="btn btn-default" title="Previous move">◀ Prev</button>
+  <button id="btnNext" class="btn btn-default" title="Next move">Next ▶</button>
+  <button id="btnLast" class="btn btn-default" title="Go to end">Last ⏭</button>
+</div>
+<span id="moveIndicator" style="margin-left: 15px; font-weight: bold;"></span>
+</p>
 
 <p id="moves"></p>
 <p id="info"></p>

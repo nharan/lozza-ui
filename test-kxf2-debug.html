@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Kxf2 Self-Capture</title>
+    <link rel="stylesheet" type="text/css" href="css/chessboard-0.3.0.css" />
+    <script src="jquery-ui-1.8.24/js/jquery-1.8.2.min.js"></script>
+    <script src="js/chessboard-0.3.0.js"></script>
+    <script src="js/chess.js"></script>
+    <style>
+        body { padding: 20px; font-family: monospace; }
+        #board { width: 400px; }
+        #log { margin-top: 20px; background: #f0f0f0; padding: 10px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h2>Debug: King captures f2 pawn (self-capture)</h2>
+    <div id="board"></div>
+    <div id="log"></div>
+
+    <script>
+        var chess = new Chess();
+        var board = null;
+        
+        function log(msg) {
+            document.getElementById('log').textContent += msg + '\n';
+            console.log(msg);
+        }
+
+        var onDragStart = function(source, piece, position, orientation) {
+            log('onDragStart called:');
+            log('  source: ' + source);
+            log('  piece: ' + piece);
+            log('  orientation: ' + orientation);
+            
+            // Check what piece is on the source square
+            var chessPiece = chess.get(source);
+            log('  chess.get(' + source + '): ' + JSON.stringify(chessPiece));
+            
+            // Original logic from play.js
+            var drag = true; // assuming drag is enabled
+            if ((!drag || orientation === 'white' && piece.search(/^w/) === -1) || 
+                (orientation === 'black' && piece.search(/^b/) === -1)) {
+                log('  BLOCKED by onDragStart');
+                return false;
+            }
+            
+            log('  ALLOWED by onDragStart');
+            return true;
+        };
+
+        var onDrop = function(source, target, piece, newPos, oldPos, orientation) {
+            log('\nonDrop called:');
+            log('  source: ' + source);
+            log('  target: ' + target);
+            log('  piece: ' + piece);
+            
+            if (target == 'offboard' || target == source) {
+                log('  BLOCKED: offboard or same square');
+                return;
+            }
+            
+            // Check what's on target before move
+            var targetPiece = chess.get(target);
+            log('  chess.get(' + target + '): ' + JSON.stringify(targetPiece));
+            
+            var move = chess.move({from: source, to: target, promotion: 'q'});
+            
+            if (!move) {
+                log('  BLOCKED: chess.move() returned null');
+                log('  This triggers snapback');
+                return 'snapback';
+            }
+            
+            log('  SUCCESS: Move executed');
+            log('  Move: ' + JSON.stringify(move));
+            
+            board.position(chess.fen());
+        };
+
+        // Set up a simple position with King on e1 and pawn on f2
+        chess.load('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 0 1');
+        
+        board = new ChessBoard('board', {
+            position: chess.fen(),
+            draggable: true,
+            onDragStart: onDragStart,
+            onDrop: onDrop
+        });
+        
+        log('Initial position loaded:');
+        log(chess.fen());
+        log('\nPiece on e1: ' + JSON.stringify(chess.get('e1')));
+        log('Piece on f2: ' + JSON.stringify(chess.get('f2')));
+        log('\nTry dragging the King from e1 to f2');
+        log('This should be a self-capture (white king captures white pawn)');
+        log('\n--- Drag Log ---\n');
+    </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Self-Capture Attack Detection Test</title>
+    <script src="js/chess.js"></script>
+</head>
+<body>
+    <h1>Self-Capture Attack Detection Test</h1>
+    <pre id="output"></pre>
+    
+    <script>
+        var output = document.getElementById('output');
+        var results = [];
+        
+        function log(msg) {
+            results.push(msg);
+            output.textContent = results.join('\n');
+        }
+        
+        function runTests() {
+            log('=== Self-Capture Attack Detection Tests ===\n');
+            
+            // Test 1: Friendly pieces don't block attacks (except kings)
+            log('Test 1: Rook attack through friendly pawn');
+            var chess = new Chess('4k3/8/8/8/8/4P3/4R3/4K3 w - - 0 1');
+            log('Position: White rook on e2, white pawn on e3, black king on e8');
+            log('Board:\n' + chess.ascii());
+            
+            // In self-capture chess, the rook should attack through the friendly pawn
+            // We can't directly call attacked(), but we can test by checking if moves are generated
+            var moves = chess.moves({verbose: true});
+            var rookMoves = moves.filter(m => m.from === 'e2');
+            var canCaptureE3 = rookMoves.some(m => m.to === 'e3');
+            log('Can rook capture friendly pawn on e3? ' + canCaptureE3);
+            log('Expected: true\n');
+            
+            // Test 2: Kings still block attacks
+            log('Test 2: Rook attack blocked by friendly king');
+            chess = new Chess('4k3/8/8/8/8/4K3/4R3/8 w - - 0 1');
+            log('Position: White rook on e2, white king on e3, black king on e8');
+            log('Board:\n' + chess.ascii());
+            
+            moves = chess.moves({verbose: true});
+            rookMoves = moves.filter(m => m.from === 'e2');
+            var canCaptureKing = rookMoves.some(m => m.to === 'e3');
+            log('Can rook capture friendly king on e3? ' + canCaptureKing);
+            log('Expected: false\n');
+            
+            // Test 3: Check detection with self-capture rules
+            log('Test 3: Check detection through friendly piece');
+            chess = new Chess('4k3/8/8/8/8/4p3/4R3/4K3 b - - 0 1');
+            log('Position: White rook on e2, black pawn on e3, black king on e8');
+            log('Board:\n' + chess.ascii());
+            log('Is black king in check? ' + chess.in_check());
+            log('Expected: true (rook attacks through friendly pawn)\n');
+            
+            // Test 4: Castling validation with self-capture-aware attack detection
+            log('Test 4: Castling with friendly piece on attacked square');
+            chess = new Chess('r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1');
+            log('Position: Standard castling position for both sides');
+            log('Board:\n' + chess.ascii());
+            moves = chess.moves({verbose: true});
+            var castlingMoves = moves.filter(m => m.flags.includes('k') || m.flags.includes('q'));
+            log('Castling moves available: ' + castlingMoves.map(m => m.san).join(', '));
+            log('Expected: O-O, O-O-O (both sides can castle)\n');
+            
+            // Test 5: Bishop attack through friendly piece
+            log('Test 5: Bishop attack through friendly piece');
+            chess = new Chess('4k3/8/8/8/6P1/5B2/8/4K3 w - - 0 1');
+            log('Position: White bishop on f3, white pawn on g4, black king on e8');
+            log('Board:\n' + chess.ascii());
+            moves = chess.moves({verbose: true});
+            var bishopMoves = moves.filter(m => m.from === 'f3');
+            var canCaptureG4 = bishopMoves.some(m => m.to === 'g4');
+            log('Can bishop capture friendly pawn on g4? ' + canCaptureG4);
+            log('Expected: true\n');
+            
+            log('=== Tests Complete ===');
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>

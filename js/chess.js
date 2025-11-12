@@ -462,6 +462,8 @@ var Chess = function(fen) {
 
     if (board[to]) {
       move.captured = board[to].type;
+      // Self-capture modification: Store captured piece color for undo
+      move.captured_color = board[to].color;
     } else if (flags & BITS.EP_CAPTURE) {
         move.captured = PAWN;
     }
@@ -533,9 +535,13 @@ var Chess = function(fen) {
           var square = i + PAWN_OFFSETS[us][j];
           if (square & 0x88) continue;
 
-          if (board[square] != null &&
-              board[square].color === them) {
-              add_move(board, moves, i, square, BITS.CAPTURE);
+          if (board[square] != null) {
+            // Self-capture modification: Allow capturing friendly pieces (except kings)
+            if (board[square].type === KING) {
+              // Never capture kings
+              continue;
+            }
+            add_move(board, moves, i, square, BITS.CAPTURE);
           } else if (square === ep_square) {
               add_move(board, moves, i, ep_square, BITS.EP_CAPTURE);
           }
@@ -552,7 +558,11 @@ var Chess = function(fen) {
             if (board[square] == null) {
               add_move(board, moves, i, square, BITS.NORMAL);
             } else {
-              if (board[square].color === us) break;
+              // Self-capture modification: Allow capturing friendly pieces (except kings)
+              if (board[square].type === KING) {
+                // Never capture kings - they block movement
+                break;
+              }
               add_move(board, moves, i, square, BITS.CAPTURE);
               break;
             }
@@ -694,7 +704,21 @@ var Chess = function(fen) {
 
         var blocked = false;
         while (j !== square) {
-          if (board[j] != null) { blocked = true; break; }
+          // Self-capture modification: Friendly non-king pieces don't block attacks (can be self-captured)
+          // Enemy non-king pieces still block attacks (standard chess rule)
+          // Kings of any color always block attacks (can never be captured)
+          if (board[j] != null) {
+            if (board[j].type === KING) {
+              // Kings always block
+              blocked = true;
+              break;
+            } else if (board[j].color !== color) {
+              // Enemy non-king pieces block (standard chess)
+              blocked = true;
+              break;
+            }
+            // Friendly non-king pieces don't block (self-capture rule)
+          }
           j += offset;
         }
 
@@ -865,11 +889,22 @@ var Chess = function(fen) {
     }
 
     /* turn off castling if we capture a rook */
+    // Self-capture modification: Check both opponent's and own rooks
     if (castling[them]) {
       for (var i = 0, len = ROOKS[them].length; i < len; i++) {
         if (move.to === ROOKS[them][i].square &&
             castling[them] & ROOKS[them][i].flag) {
           castling[them] ^= ROOKS[them][i].flag;
+          break;
+        }
+      }
+    }
+    // Also check if we captured our own rook (self-capture)
+    if (castling[us]) {
+      for (var i = 0, len = ROOKS[us].length; i < len; i++) {
+        if (move.to === ROOKS[us][i].square &&
+            castling[us] & ROOKS[us][i].flag) {
+          castling[us] ^= ROOKS[us][i].flag;
           break;
         }
       }
@@ -921,7 +956,11 @@ var Chess = function(fen) {
     board[move.to] = null;
 
     if (move.flags & BITS.CAPTURE) {
-      board[move.to] = {type: move.captured, color: them};
+      // Self-capture modification: Determine captured piece color
+      // Check if this was a self-capture by looking at the captured piece color
+      // stored in the move object (if available), otherwise assume opponent capture
+      var captured_color = move.captured_color || them;
+      board[move.to] = {type: move.captured, color: captured_color};
     } else if (move.flags & BITS.EP_CAPTURE) {
       var index;
       if (us === BLACK) {

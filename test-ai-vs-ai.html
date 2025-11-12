@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI vs AI Self-Capture Chess Test</title>
+    <script src="js/chess.js"></script>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        #output {
+            white-space: pre-wrap;
+            background: #252526;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 3px;
+        }
+        button:hover {
+            background: #1177bb;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .stats {
+            background: #2d2d30;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+        .controls label {
+            margin-right: 10px;
+        }
+        .controls select {
+            padding: 5px;
+            background: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI vs AI Self-Capture Chess Test</h1>
+    <div class="stats">
+        <div>Game Status: <span id="status">Ready</span></div>
+        <div>Moves Played: <span id="moveCount">0</span></div>
+        <div>Self-Captures: <span id="selfCaptureCount">0</span></div>
+        <div>Regular Captures: <span id="regularCaptureCount">0</span></div>
+        <div>Current Turn: <span id="currentTurn">White</span></div>
+    </div>
+    <div class="controls">
+        <label>White Strength:</label>
+        <select id="whiteStrength">
+            <option value="1">Level 1</option>
+            <option value="2">Level 2</option>
+            <option value="3" selected>Level 3</option>
+            <option value="4">Level 4</option>
+            <option value="5">Level 5</option>
+            <option value="6">Level 6</option>
+            <option value="7">Level 7</option>
+            <option value="8">Level 8</option>
+        </select>
+        <label style="margin-left: 20px;">Black Strength:</label>
+        <select id="blackStrength">
+            <option value="1">Level 1</option>
+            <option value="2">Level 2</option>
+            <option value="3" selected>Level 3</option>
+            <option value="4">Level 4</option>
+            <option value="5">Level 5</option>
+            <option value="6">Level 6</option>
+            <option value="7">Level 7</option>
+            <option value="8">Level 8</option>
+        </select>
+    </div>
+    <button id="startBtn" onclick="startGame()">Start AI vs AI Game</button>
+    <button id="stopBtn" onclick="stopGame()" disabled>Stop Game</button>
+    <button onclick="clearOutput()">Clear Output</button>
+    <div id="output"></div>
+
+    <script>
+        let chess = new Chess();
+        let whiteEngine = null;
+        let blackEngine = null;
+        let gameRunning = false;
+        let moveCount = 0;
+        let selfCaptureCount = 0;
+        let regularCaptureCount = 0;
+        let waitingForMove = false;
+        let currentBestMove = null;
+
+        function log(message) {
+            const output = document.getElementById('output');
+            output.textContent += message + '\n';
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function updateStats() {
+            document.getElementById('moveCount').textContent = moveCount;
+            document.getElementById('selfCaptureCount').textContent = selfCaptureCount;
+            document.getElementById('regularCaptureCount').textContent = regularCaptureCount;
+            document.getElementById('currentTurn').textContent = chess.turn() === 'w' ? 'White' : 'Black';
+        }
+
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+        }
+
+        function isSelfCapture(from, to) {
+            // Get the piece that's moving
+            const fromPiece = chess.get(from);
+            if (!fromPiece) return false;
+            
+            // Get the piece being captured (before the move)
+            const toPiece = chess.get(to);
+            if (!toPiece) return false;
+            
+            // Check if same color
+            return fromPiece.color === toPiece.color;
+        }
+
+        function initEngines() {
+            // Create two separate engine instances
+            whiteEngine = new Worker('lozza.js');
+            blackEngine = new Worker('lozza.js');
+
+            whiteEngine.onmessage = function(e) {
+                handleEngineMessage(e.data, 'white');
+            };
+
+            blackEngine.onmessage = function(e) {
+                handleEngineMessage(e.data, 'black');
+            };
+
+            // Initialize both engines
+            whiteEngine.postMessage('uci');
+            blackEngine.postMessage('uci');
+        }
+
+        function handleEngineMessage(msg, color) {
+            // Parse bestmove from engine output
+            if (msg.startsWith('bestmove')) {
+                const parts = msg.split(' ');
+                const moveStr = parts[1];
+                
+                // Only process if it's the current player's turn
+                const currentColor = chess.turn() === 'w' ? 'white' : 'black';
+                if (color === currentColor && waitingForMove) {
+                    currentBestMove = moveStr;
+                    waitingForMove = false;
+                    processBestMove();
+                }
+            }
+        }
+
+        function processBestMove() {
+            if (!currentBestMove || !gameRunning) return;
+
+            const moveStr = currentBestMove;
+            currentBestMove = null;
+
+            const from = moveStr.substring(0, 2);
+            const to = moveStr.substring(2, 4);
+            const promotion = moveStr.length > 4 ? moveStr[4] : undefined;
+
+            // Check if it's a self-capture before making the move
+            const wasSelfCapture = isSelfCapture(from, to);
+
+            // Make the move
+            const moveObj = { from, to };
+            if (promotion) moveObj.promotion = promotion;
+            
+            const move = chess.move(moveObj);
+
+            if (move) {
+                moveCount++;
+
+                if (wasSelfCapture) {
+                    selfCaptureCount++;
+                    log(`${Math.ceil(moveCount/2)}. ${move.color === 'w' ? 'White' : 'Black'}: ${move.san} [SELF-CAPTURE]`);
+                } else if (move.captured) {
+                    regularCaptureCount++;
+                    log(`${Math.ceil(moveCount/2)}. ${move.color === 'w' ? 'White' : 'Black'}: ${move.san} (captures ${move.captured})`);
+                } else {
+                    log(`${Math.ceil(moveCount/2)}. ${move.color === 'w' ? 'White' : 'Black'}: ${move.san}`);
+                }
+
+                updateStats();
+
+                // Check if game is over
+                if (chess.game_over()) {
+                    gameRunning = false;
+                    if (chess.in_checkmate()) {
+                        log(`\n*** Game Over: Checkmate! ${chess.turn() === 'w' ? 'Black' : 'White'} wins! ***`);
+                    } else if (chess.in_stalemate()) {
+                        log('\n*** Game Over: Stalemate! ***');
+                    } else if (chess.in_draw()) {
+                        log('\n*** Game Over: Draw! ***');
+                    } else if (chess.insufficient_material()) {
+                        log('\n*** Game Over: Draw by insufficient material! ***');
+                    } else if (chess.in_threefold_repetition()) {
+                        log('\n*** Game Over: Draw by threefold repetition! ***');
+                    }
+                    document.getElementById('status').textContent = 'Game Over';
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    return;
+                }
+
+                // Continue game after short delay
+                setTimeout(makeAIMove, 500);
+            } else {
+                log(`Error: Invalid move from AI: ${moveStr}`);
+                gameRunning = false;
+                document.getElementById('status').textContent = 'Error';
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        }
+
+        function makeAIMove() {
+            if (!gameRunning) return;
+
+            const currentEngine = chess.turn() === 'w' ? whiteEngine : blackEngine;
+            const depth = chess.turn() === 'w' ? 
+                document.getElementById('whiteStrength').value : 
+                document.getElementById('blackStrength').value;
+
+            // Get move history
+            const moves = chess.history({ verbose: true });
+            let moveStr = '';
+            for (let i = 0; i < moves.length; i++) {
+                if (i > 0) moveStr += ' ';
+                moveStr += moves[i].from + moves[i].to;
+                if (moves[i].promotion) moveStr += moves[i].promotion;
+            }
+
+            // Send position to engine
+            currentEngine.postMessage('ucinewgame');
+            if (moveStr) {
+                currentEngine.postMessage('position startpos moves ' + moveStr);
+            } else {
+                currentEngine.postMessage('position startpos');
+            }
+
+            // Request move
+            waitingForMove = true;
+            currentEngine.postMessage('go depth ' + depth);
+        }
+
+        function startGame() {
+            if (gameRunning) return;
+
+            // Initialize engines if not already done
+            if (!whiteEngine || !blackEngine) {
+                initEngines();
+                // Wait a bit for engines to initialize
+                setTimeout(startGame, 500);
+                return;
+            }
+
+            chess.reset();
+            moveCount = 0;
+            selfCaptureCount = 0;
+            regularCaptureCount = 0;
+            gameRunning = true;
+            waitingForMove = false;
+            currentBestMove = null;
+
+            document.getElementById('status').textContent = 'Playing';
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            updateStats();
+
+            log('=== Starting AI vs AI Game ===');
+            log(`White: Level ${document.getElementById('whiteStrength').value}`);
+            log(`Black: Level ${document.getElementById('blackStrength').value}`);
+            log('Initial Position: ' + chess.fen());
+            log('');
+
+            makeAIMove();
+        }
+
+        function stopGame() {
+            gameRunning = false;
+            waitingForMove = false;
+            document.getElementById('status').textContent = 'Stopped';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            log('\n=== Game Stopped ===');
+        }
+
+        log('AI vs AI Self-Capture Chess Test Ready');
+        log('Select strength levels and click "Start AI vs AI Game" to begin');
+        log('');
+    </script>
+</body>
+</html>
