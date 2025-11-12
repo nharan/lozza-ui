@@ -704,20 +704,10 @@ var Chess = function(fen) {
 
         var blocked = false;
         while (j !== square) {
-          // Self-capture modification: Friendly non-king pieces don't block attacks (can be self-captured)
-          // Enemy non-king pieces still block attacks (standard chess rule)
-          // Kings of any color always block attacks (can never be captured)
+          // All pieces block attacks - self-capture doesn't change blocking rules
           if (board[j] != null) {
-            if (board[j].type === KING) {
-              // Kings always block
-              blocked = true;
-              break;
-            } else if (board[j].color !== color) {
-              // Enemy non-king pieces block (standard chess)
-              blocked = true;
-              break;
-            }
-            // Friendly non-king pieces don't block (self-capture rule)
+            blocked = true;
+            break;
           }
           j += offset;
         }
