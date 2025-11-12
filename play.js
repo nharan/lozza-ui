@@ -23,6 +23,10 @@ var selectedPiece = null;
 var savedHistory = [];
 var inReplay = false;
 
+// AI vs AI mode
+var aiVsAiMode = false;
+var aiHumanLevel = 5; // Level for human side when AI mode is ON
+
 lozData.page    = 'play.htm';
 lozData.idInfo  = '#info';
 lozData.idStats = '#stats';
@@ -147,8 +151,18 @@ function lozUpdateBestMove () {
   console.log('After move - history length:', chess.history().length);
   console.log('btnPrev disabled?', $('#btnPrev').prop('disabled'));
 
-  if (!chess.game_over())
+  if (!chess.game_over()) {
     drag = true;
+    
+    // If AI vs AI mode is on, immediately trigger next AI move
+    if (aiVsAiMode) {
+      drag = false;
+      setTimeout(function() {
+        engine.postMessage('position ' + startFrom + ' moves ' + strMoves());
+        postGo();
+      }, 100); // Small delay so the board updates visually
+    }
+  }
   else
     showEnd();
 }
@@ -387,20 +401,33 @@ function getLevel () {
 function postGo () {
 
   var go = '';
+  
+  // Determine which level to use
+  var currentLevel = level;
+  if (aiVsAiMode) {
+    // In AI mode, check if it's the human's side
+    var humanColor = board.orientation();
+    var currentTurn = chess.turn();
+    var isHumanSide = (humanColor === 'white' && currentTurn === 'w') || 
+                      (humanColor === 'black' && currentTurn === 'b');
+    if (isHumanSide) {
+      currentLevel = aiHumanLevel;
+    }
+  }
 
-  if (level < 1)
-    level = 1;
+  if (currentLevel < 1)
+    currentLevel = 1;
 
   if (args.m)
     go = args.m;
 
-  else if (level <= 8) {
-    go = 'go depth ' + level;
+  else if (currentLevel <= 8) {
+    go = 'go depth ' + currentLevel;
   }
-  else if (level == 9)
+  else if (currentLevel == 9)
       go = 'go movetime 2000';
 
-  else if (level >= 10)
+  else if (currentLevel >= 10)
       go = 'go movetime 10000';
 
   $('#strength').html('Strength (' + level + ')'); //jic
@@ -505,6 +532,42 @@ $(function() {
   
     return false;
   });
+  
+  $('#aiMode').click(function() {
+    aiVsAiMode = !aiVsAiMode;
+    
+    if (aiVsAiMode) {
+      $(this).text('AI Mode - ON (Lvl ' + aiHumanLevel + ')').removeClass('btn-warning').addClass('btn-success');
+      $(this).next('.dropdown-toggle').removeClass('btn-warning').addClass('btn-success');
+      // If it's currently the human's turn, trigger AI to move
+      if (drag && !chess.game_over()) {
+        drag = false;
+        engine.postMessage('position ' + startFrom + ' moves ' + strMoves());
+        postGo();
+      }
+    } else {
+      $(this).text('AI Mode - OFF (Lvl ' + aiHumanLevel + ')').removeClass('btn-success').addClass('btn-warning');
+      $(this).next('.dropdown-toggle').removeClass('btn-success').addClass('btn-warning');
+    }
+    
+    return false;
+  });
+  
+  // AI Human side strength handlers
+  for (var i = 1; i <= 10; i++) {
+    (function(lvl) {
+      $('#aiHuman' + lvl).click(function() {
+        aiHumanLevel = lvl;
+        if (aiVsAiMode) {
+          $('#aiMode').text('AI Mode - ON (Lvl ' + aiHumanLevel + ')');
+        } else {
+          $('#aiMode').text('AI Mode - OFF (Lvl ' + aiHumanLevel + ')');
+        }
+        // Let Bootstrap handle closing the dropdown
+        return true;
+      });
+    })(i);
+  }
   
   
   //}}}
