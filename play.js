@@ -27,6 +27,58 @@ lozData.page    = 'play.htm';
 lozData.idInfo  = '#info';
 lozData.idStats = '#stats';
 
+//{{{  updateEvalBar
+
+function updateEvalBar(score, units) {
+  // Engine reports score from perspective of side to move
+  // We need to convert to white's perspective
+  // If it's black's turn, flip the score
+  
+  var evalScore = 0;
+  var displayText = '';
+  
+  // Flip score if black to move (chess.turn() returns 'w' or 'b')
+  var scoreFromWhitePerspective = score;
+  if (chess && chess.turn() === 'b') {
+    scoreFromWhitePerspective = -score;
+  }
+  
+  if (units === 'mate') {
+    // Mate in X moves
+    if (scoreFromWhitePerspective > 0) {
+      evalScore = 10; // White is winning
+      displayText = 'M' + Math.abs(score);
+    } else {
+      evalScore = -10; // Black is winning
+      displayText = 'M' + Math.abs(score);
+    }
+  } else {
+    // Centipawns (cp) - convert to pawns
+    evalScore = scoreFromWhitePerspective / 100;
+    displayText = (evalScore >= 0 ? '+' : '') + evalScore.toFixed(1);
+  }
+  
+  // Clamp eval between -10 and +10 for display purposes
+  var clampedEval = Math.max(-10, Math.min(10, evalScore));
+  
+  // Convert to percentage (50% = equal, 100% = white winning, 0% = black winning)
+  var percentage = 50 + (clampedEval / 10) * 50;
+  
+  // Update the bar height
+  $('#eval-bar-white').css('height', percentage + '%');
+  $('#eval-text').text(displayText);
+  
+  // Adjust text color based on position
+  if (percentage > 50) {
+    $('#eval-text').css('color', '#000');
+  } else {
+    $('#eval-text').css('color', '#fff');
+  }
+}
+
+//}}}
+//{{{  updateHistoryUI
+
 //{{{  updateHistoryUI
 
 function updateHistoryUI() {
@@ -104,16 +156,17 @@ function lozUpdateBestMove () {
 //}}}
 //{{{  lozUpdatePV
 
-//function lozUpdatePV () {
-
-  //if (lozData.units == 'cp')
-    //$(lozData.idInfo).prepend('depth ' + lozData.depth + ' (' + lozData.score + ') ' + lozData.pv + '<br>');
-  //if (lozData.score > 0 && lozData.units != 'cp')
-    //$(lozData.idInfo).prepend('depth ' + lozData.depth + ' (<b>mate in ' + lozData.score + '</b>) ' + lozData.pv + '<br>');
-  //else if (lozData.units != 'cp')
-    //$(lozData.idInfo).prepend('depth ' + lozData.depth + ' (<b>checkmate</b>) ' + lozData.pv + '<br>');
-
-//}
+function lozUpdatePV () {
+  // Debug: log what we're getting from the engine
+  console.log('Engine eval - score:', lozData.score, 'units:', lozData.units, 'turn:', chess.turn(), 'fen:', chess.fen());
+  
+  // Update the evaluation bar with the latest score
+  updateEvalBar(lozData.score, lozData.units);
+  
+  // Optional: display PV info
+  // if (lozData.units == 'cp')
+  //   $(lozData.idInfo).prepend('depth ' + lozData.depth + ' (' + lozData.score + ') ' + lozData.pv + '<br>');
+}
 
 //}}}
 //{{{  clearHighlights
@@ -477,6 +530,9 @@ $(function() {
     onDragStart  : onDragStart,
     position     : startFromUI
   });
+  
+  // Initialize eval bar
+  updateEvalBar(0, 'cp');
 
   // Add mousedown/mouseup handler to detect clicks vs drags
   var mouseDownSquare = null;
