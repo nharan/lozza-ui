@@ -19,10 +19,32 @@ var level       = 1;
 var selectedSquare = null;
 var selectedPiece = null;
 
+// History navigation globals
+var savedHistory = [];
+var inReplay = false;
+
 lozData.page    = 'play.htm';
 lozData.idInfo  = '#info';
 lozData.idStats = '#stats';
 
+//{{{  updateHistoryUI
+
+function updateHistoryUI() {
+  if (!chess) return; // Not initialized yet
+  var currentMoves = chess.history().length;
+  var totalMoves = savedHistory.length;
+  $('#btnFirst').prop('disabled', currentMoves === 0);
+  $('#btnPrev').prop('disabled', currentMoves === 0);
+  $('#btnNext').prop('disabled', !inReplay || currentMoves >= totalMoves);
+  $('#btnLast').prop('disabled', !inReplay || currentMoves >= totalMoves);
+  if (inReplay) {
+    $('#moveIndicator').text('Move ' + currentMoves + ' of ' + totalMoves);
+  } else {
+    $('#moveIndicator').text('');
+  }
+}
+
+//}}}
 //{{{  lozUpdateBestMove
 
 function lozUpdateBestMove () {
@@ -63,6 +85,15 @@ function lozUpdateBestMove () {
   
   board.position(chess.fen());
   $('#moves').html(chess.pgn({newline_char: '<br>'}));
+  
+  // Update history UI after each move
+  if (typeof updateHistoryUI === 'function') {
+    updateHistoryUI();
+  }
+  
+  // Debug: Check button state after move
+  console.log('After move - history length:', chess.history().length);
+  console.log('btnPrev disabled?', $('#btnPrev').prop('disabled'));
 
   if (!chess.game_over())
     drag = true;
@@ -105,6 +136,13 @@ var onDrop = function(source, target, piece, newPos, oldPos, orientation) {
   selectedPiece = null;
   clearHighlights();
 
+  // If in replay mode, exit it and discard future moves
+  if (inReplay) {
+    inReplay = false;
+    savedHistory = [];
+    drag = true;
+  }
+
   var move = chess.move({from: source, to: target, promotion: 'q'})
   if (!move) {
     return 'snapback';
@@ -117,6 +155,8 @@ var onDrop = function(source, target, piece, newPos, oldPos, orientation) {
   $('#moves').html(pgn);
 
   drag = false;
+  
+  updateHistoryUI();
 
   if (!chess.game_over()) {
     $(lozData.idInfo).html('');
@@ -489,6 +529,87 @@ $(function() {
   }
   //$(lozData.idInfo).prepend('Level ' + level + '<br>');
   $('#strength').html('Strength (' + level + ')');
+
+  // History navigation
+  console.log('History navigation code loading...');
+  console.log('Attaching button handlers...');
+  console.log('btnFirst exists?', $('#btnFirst').length);
+  console.log('btnPrev exists?', $('#btnPrev').length);
+  
+  // Use event delegation on document body to ensure events are captured
+  $(document).on('click', '#btnFirst', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('First button clicked!');
+    if (chess.history().length === 0) return;
+    if (!inReplay) {
+      savedHistory = chess.history().slice();
+    }
+    inReplay = true;
+    drag = false;
+    while (chess.history().length > 0) {
+      chess.undo();
+    }
+    board.position(chess.fen());
+    updateHistoryUI();
+  });
+  
+  $(document).on('click', '#btnPrev', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Prev clicked, history length:', chess.history().length);
+    if (chess.history().length === 0) {
+      console.log('No history, returning');
+      return;
+    }
+    if (!inReplay) {
+      savedHistory = chess.history().slice();
+      console.log('Saved history:', savedHistory);
+    }
+    inReplay = true;
+    drag = false;
+    chess.undo();
+    console.log('After undo, position:', chess.fen());
+    board.position(chess.fen());
+    updateHistoryUI();
+  });
+  
+  $(document).on('click', '#btnNext', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Next button clicked!');
+    if (!inReplay || chess.history().length >= savedHistory.length) return;
+    var nextMove = savedHistory[chess.history().length];
+    chess.move(nextMove);
+    board.position(chess.fen());
+    
+    // If we've reached the end, exit replay mode
+    if (chess.history().length >= savedHistory.length) {
+      inReplay = false;
+      drag = true;
+      savedHistory = [];
+    }
+    
+    updateHistoryUI();
+  });
+  
+  $(document).on('click', '#btnLast', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Last button clicked!');
+    if (!inReplay) return;
+    while (chess.history().length < savedHistory.length) {
+      var nextMove = savedHistory[chess.history().length];
+      chess.move(nextMove);
+    }
+    board.position(chess.fen());
+    inReplay = false;
+    drag = true;
+    savedHistory = [];
+    updateHistoryUI();
+  });
+  
+  updateHistoryUI();
 
   //console.log(args);
 

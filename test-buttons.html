@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Button Test</title>
+<script src="jquery-ui-1.8.24/js/jquery-1.8.2.min.js"></script>
+<script src="bootstrap3/js/bootstrap.min.js"></script>
+<link rel="stylesheet" type="text/css" media="screen" href="bootstrap3/css/bootstrap.min.css" />
+</head>
+<body>
+
+<h1>Button Test</h1>
+
+<div class="btn-group">
+  <button id="btnFirst" class="btn btn-default">⏮ First</button>
+  <button id="btnPrev" class="btn btn-default">◀ Prev</button>
+  <button id="btnNext" class="btn btn-default">Next ▶</button>
+  <button id="btnLast" class="btn btn-default">Last ⏭</button>
+</div>
+
+<p id="output"></p>
+
+<script>
+$(function() {
+  console.log('Document ready');
+  console.log('btnFirst exists?', $('#btnFirst').length);
+  console.log('btnPrev exists?', $('#btnPrev').length);
+  
+  $('#btnFirst').on('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('First clicked!');
+    $('#output').append('First clicked!<br>');
+  });
+  
+  $('#btnPrev').on('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Prev clicked!');
+    $('#output').append('Prev clicked!<br>');
+  });
+  
+  $('#btnNext').on('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Next clicked!');
+    $('#output').append('Next clicked!<br>');
+  });
+  
+  $('#btnLast').on('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Last clicked!');
+    $('#output').append('Last clicked!<br>');
+  });
+});
+</script>
+
+</body>
+</html>
